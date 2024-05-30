@@ -1,0 +1,1 @@
+select ords.installed_version from dual;

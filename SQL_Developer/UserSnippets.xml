@@ -1,0 +1,412 @@
+<?xml version = '1.0' encoding = 'UTF-8'?>
+<snippets>
+   <group category="{Custom} APEX" language="PLSQL">
+      <snippet name="APEX USER reset/unlock" description="">
+         <code>
+            <![CDATA[declare
+  l_workspace varchar2(30 char) := 'workspace';
+  l_username  varchar2(30 char) := 'username';
+begin
+  apex_util.set_workspace ( p_workspace => l_workspace );
+  apex_util.reset_password (
+        p_user_name     => l_username,
+        p_old_password  => null,
+        p_new_password  => 'password',
+        p_change_password_on_first_use => false);
+  apex_util.unlock_account ( p_user_name  => l_username);
+end;
+/]]>
+         </code>
+      </snippet>
+      <snippet name="set security group" description="">
+         <code>
+            <![CDATA[begin
+  for c1 in (
+    select workspace_id
+      from apex_applications
+       where application_id = 100 )
+  loop
+    apex_util.set_security_group_id(p_security_group_id => c1.workspace_id);
+  end loop;
+end;
+/
+]]>
+         </code>
+      </snippet>
+      <snippet name="send mail" description="">
+         <code>
+            <![CDATA[declare
+  l_id NUMBER;
+
+  l_to    varchar2(100 char) := 'mail_to';
+  l_from  varchar2(100 char) := 'mail_from';
+begin
+  l_id := apex_mail.send(
+    p_to        => l_to,
+    p_from      => l_from,
+    p_subj      => 'TEST',
+    p_body      => 'Send from app',
+    p_body_html => 'Send from app');
+/*
+  for c1 in (select filename, blob_content, mime_type
+         from apex_application_files
+        where id in (123,456))
+  loop
+
+    apex_mail.add_attachment(
+      p_mail_id    => l_id,
+      p_attachment => c1.blob_content,
+      p_filename   => c1.filename,
+      p_mime_type  => c1.mime_type);
+  end loop;
+
+*/
+  commit;
+  apex_mail.push_queue;
+end;
+/
+]]>
+         </code>
+      </snippet>
+      <snippet name="APEX views" description="">
+         <code>
+            <![CDATA[select distinct apex_view_name
+  from apex_dictionary
+--  where apex_view_name like '%DEBUG%'
+; ]]>
+         </code>
+      </snippet>
+      <snippet name="kill session" description="">
+         <code>
+            <![CDATA[DEFINE df_p_app_workspace = 'workspace';
+
+
+/* Query sessions */
+  select * from apex_workspace_sessions where workspace_name = '&&df_p_app_workspace';
+
+/* Kill all sessions on workspace
+  declare
+    l_workspace varchar2(30 char) := '&&df_p_app_workspace';
+  begin
+    apex_util.set_workspace (
+      p_workspace => l_workspace );
+
+    for i in (select * from apex_workspace_sessions where workspace_name = l_workspace)
+    loop
+      apex_session.delete_session (p_session_id => i.apex_session_id );
+    end loop;
+    commit;
+  end;
+  /
+*/
+
+
+/* Kill single session
+  declare
+    l_workspace varchar2(30 char) := '&&df_p_app_workspace';
+      l_session   number := 0;
+  begin
+    apex_util.set_workspace (
+          p_workspace => :l_workspace );
+
+      apex_session.delete_session (p_session_id => l_session );
+  commit;
+  end;
+  /
+*/
+]]>
+         </code>
+      </snippet>
+      <snippet name="debug PL/SQL" description="">
+         <code>
+            <![CDATA[declare
+  l_workspace varchar2(30 char) := 'workspace';
+  l_app_id    number            := app_id;
+  l_session_id number           := 0;
+begin
+    apex_util.set_workspace (
+      p_workspace => l_workspace );
+
+    apex_session.attach (
+      p_app_id  => l_app_id,
+      p_page_id => 1,
+      p_session_id => l_session_id);
+
+  /* -- Full debug -- */
+    apex_debug.enable(p_level=>apex_debug.c_log_level_engine_trace);
+
+  /* -- Classic --
+    apex_debug.enable(p_level=>apex_debug.c_log_level_info);
+  */
+
+    apex_debug.enable_dbms_output(p_prefix=>'APEX Debug-');
+
+end;
+/
+
+
+/* Add parameter to debugg script
+  begin
+    apex_util.set_session_state(p_name => 'P0_ID', p_value => 'TEST');
+  end;
+  /
+*/
+
+
+/* Debug messages
+  select * from apex_debug_messages;
+*/
+
+/* Disable debug
+  begin
+    apex_debug.disable;
+    apex_session.detach;
+  end;
+  /
+*/
+]]>
+         </code>
+      </snippet>
+      <snippet name="import app" description="">
+         <code>
+            <![CDATA[declare
+  l_workspace varchar2(30 char) := 'workspace';
+  l_app_id    number            := 100;
+
+  l_workspace_id   number;
+begin
+  l_workspace_id := apex_util.find_security_group_id (l_workspace);
+  apex_application_install.set_workspace_id (l_workspace_id);
+  apex_application_install.set_application_id(l_app_id);
+  apex_application_install.set_schema(l_workspace);
+end;
+/
+
+-- Run app install
+-- e.g @f100.sql]]>
+         </code>
+      </snippet>
+      <snippet name="get version" description="">
+         <code>
+            <![CDATA[select * 
+  from apex_release;
+  
+select *
+  from apex_patches;]]>
+         </code>
+      </snippet>
+      <snippet name="download file" description="">
+         <code>
+            <![CDATA[declare
+  l_blob blob;
+  l_filename varchar2(100 char);
+  l_mimetype varchar2(100 char);
+begin
+  select blob_content, mimetype, filename
+     into l_blob, l_mimetype, l_filename
+    from my_image_table
+    where id = :FILE_ID;
+  --
+  sys.htp.init;
+  sys.owa_util.mime_header( l_mimetype, FALSE );
+  sys.htp.p('Content-length: ' || sys.dbms_lob.getlength( l_blob));
+  sys.htp.p('Content-Disposition: attachment; filename="' || l_filename || '"' );
+  sys.owa_util.http_header_close;
+  sys.wpg_docload.download_file( l_blob );
+
+  apex_application.stop_apex_engine;
+
+end;
+/]]>
+         </code>
+      </snippet>
+      <snippet name="split string" description="">
+         <code>
+            <![CDATA[declare
+  l_string          varchar2(4000) := 'P1_X:P1_Y';
+  l_page_items_arr  apex_t_varchar2;
+begin
+  l_page_items_arr := apex_string.split(p_str => l_string, p_sep => ':');
+  for i in 1..l_page_items_arr.count
+  loop
+    sys.dbms_output.put_line(l_page_items_arr(i)||':'||apex_util.get_session_state(l_page_items_arr(i)));
+  end loop;
+end;
+/]]>
+         </code>
+      </snippet>
+      <snippet name="collection" description="">
+         <code>
+            <![CDATA[SELECT seq_id, c001, c002, c003, c004, c005, n001, d001, clob001
+  FROM APEX_collections
+ WHERE collection_name = 'collection_name';
+  ]]>
+         </code>
+      </snippet>
+      <snippet name="export application" description="">
+         <code>
+            <![CDATA[variable name varchar2(255)
+variable contents clob
+declare
+   l_files apex_t_export_files;
+begin
+   l_files := apex_export.get_application(p_application_id => 100);
+   :name := l_files(1).name;
+   :contents := l_files(1).contents;
+end;
+/
+set feed off echo off head off flush off termout off trimspool on
+set long 100000000 longchunksize 32767
+col name new_val name
+select :name name from sys.dual;
+spool &name.
+print contents
+spool off
+
+/*
+FUNCTION GET_APPLICATION (
+     p_application_id          IN NUMBER,
+     p_split                   IN BOOLEAN             DEFAULT FALSE,
+     p_with_date               IN BOOLEAN             DEFAULT FALSE,
+     p_with_ir_public_reports  IN BOOLEAN             DEFAULT FALSE,
+     p_with_ir_private_reports IN BOOLEAN             DEFAULT FALSE,
+     p_with_ir_notifications   IN BOOLEAN             DEFAULT FALSE,
+     p_with_translations       IN BOOLEAN             DEFAULT FALSE,
+     p_with_pkg_app_mapping    IN BOOLEAN             DEFAULT FALSE,
+     p_with_original_ids       IN BOOLEAN             DEFAULT FALSE,
+     p_with_no_subscriptions   IN BOOLEAN             DEFAULT FALSE,
+     p_with_comments           IN BOOLEAN             DEFAULT FALSE,
+     p_with_supporting_objects IN VARCHAR2            DEFAULT NULL,
+     p_with_acl_assignments    IN BOOLEAN             DEFAULT FALSE,  
+     p_components              IN apex_t_varchar2     DEFAULT NULL )
+     RETURN apex_t_export_files;
+*/     ]]>
+         </code>
+      </snippet>
+      <snippet name="JSON parse" description="">
+         <code>
+            <![CDATA[declare
+  s varchar2(32767) := '{ "a": 1, "b": ["hello", "world"]}';
+begin
+  apex_json.parse(s);
+  sys.dbms_output.put_line('a is '||apex_json.get_varchar2(p_path => 'a'));
+end;
+/]]>
+         </code>
+      </snippet>
+      <snippet name="JSON open" description="">
+         <code>
+            <![CDATA[BEGIN
+  apex_json.initialize_clob_output;
+
+  apex_json.open_object;
+  apex_json.write('hello', 'world');
+  apex_json.close_object;
+
+  dbms_output.put_line(apex_json.get_clob_output);
+
+ apex_json.free_output;
+END;
+/]]>
+         </code>
+      </snippet>
+      <snippet name="set workspace" description="">
+         <code>
+            <![CDATA[begin
+    apex_util.set_workspace (
+                p_workspace => :p_workspace );
+end;                    
+/
+]]>
+         </code>
+      </snippet>
+      <snippet name="session create" description="">
+         <code>
+            <![CDATA[begin
+	apex_session.create_session(p_app_id => 100, p_page_id => 1, p_username => 'ANDREJGR');
+end;
+/]]>
+         </code>
+      </snippet>
+      <snippet name="OCI mail settings" description="">
+         <code>
+            <![CDATA[begin
+  apex_instance_admin.set_parameter('SMTP_HOST_PORT', 587);
+  apex_instance_admin.set_parameter('SMTP_HOST_ADDRESS', 'smtp.email.uk-london-1.oci.oraclecloud.com');
+
+
+  apex_instance_admin.set_parameter('SMTP_USERNAME', '');
+  apex_instance_admin.set_parameter('SMTP_PASSWORD', '');
+  commit;
+end;
+/
+
+
+begin
+  apex_instance_admin.validate_email_config;
+end;
+/]]>
+         </code>
+      </snippet>
+      <snippet name="add INTERNAL user" description="">
+         <code>
+            <![CDATA[SELECT * FROM apex_workspace_apex_users; -- check users
+
+
+-- Add new user as sysdba
+begin
+
+  apex_util.set_workspace('INTERNAL');
+
+  apex_util.create_user(
+    p_user_name                     => 'ADMIN_DBA',
+    p_email_address                 => 'admin@company.com',
+    p_web_password                  => 'password',
+    p_developer_privs               => 'ADMIN:CREATE:DATA_LOADER:EDIT:HELP:MONITOR:SQL',
+    p_change_password_on_first_use  => 'N'
+    );
+   commit;
+end;
+/
+
+
+-- Unlock locked user
+begin
+
+  apex_util.set_workspace('INTERNAL');
+  apex_util.unlock_account(p_user_name => 'ADMIN_DBA');
+  commit;
+end;
+/]]>
+         </code>
+      </snippet>
+      <snippet name="list CGI headers" description="">
+         <code>
+            <![CDATA[-- Run in APEX SQL Workshop or app
+begin
+  FOR i IN 1..owa.num_cgi_vars LOOP
+    htp.p(owa.cgi_var_name(i)||' : '||owa.cgi_var_val(i));
+  END LOOP;
+end;
+/]]>
+         </code>
+      </snippet>
+      <snippet name="OCI upgrade" description="">
+         <code>
+            <![CDATA[select apex_instance_admin.get_parameter('UPGRADE_STATUS') as UPGRADE_STATUS from dual;
+
+/*
+UPGRADE_STATUS
+--------------
+AVAILABLE
+
+If an upgrade is available, you can initiate it during the upgrade window by running:
+*/
+begin
+  apex_instance_admin.set_parameter('UPGRADE_STATUS', 'RUN');
+end;
+/]]>
+         </code>
+      </snippet>
+   </group>
+</snippets>
